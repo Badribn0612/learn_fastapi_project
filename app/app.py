@@ -1,0 +1,43 @@
+from fastapi import FastAPI, HTTPException
+from app.schemas import PostCreate
+app = FastAPI()
+
+# @app.get('/hello-world')
+# def hello_world():
+#     return {"message": "Hello World"}
+# # We are mostly going to return a pydantic object or a python dictionary
+
+text_posts = {
+    1: {
+        "title": "New Post",
+        "content": "Cool test post"
+    },
+    2: {
+        "title": "Getting Started with AI",
+        "content": "A beginner-friendly guide to understanding how AI works and where to start learning."
+    },
+    3: {
+        "title": "Why RAG Matters",
+        "content": "Retrieval-Augmented Generation helps LLMs stay factual by grounding responses in external knowledge."
+    }
+}
+
+# Reason why you should specify the data type of the arguments is that it can be documented by fastapi
+@app.get('/posts')
+def get_all_posts(limit: int = None):
+    if limit:
+        return list(text_posts.values())[:limit]
+    return text_posts
+
+@app.get(f'/posts/{id}')
+def get_posts(id: int):
+    if id not in text_posts:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return text_posts.get(id)
+
+# FastAPI automatically validates the data that comes into the API
+@app.post("/posts")
+def create_post(post: PostCreate):
+    new_post = {"title": post.title, "content": post.content}
+    text_posts[len(text_posts) + 1] = new_post
+    return new_post
