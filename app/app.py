@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
 from app.schemas import PostCreate, PostResponse
 from app.db import Post, create_db_and_tables, get_async_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
+from sqlalchemy import select
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -11,48 +12,42 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# @app.get('/hello-world')
-# def hello_world():
-#     return {"message": "Hello World"}
-# # We are mostly going to return a pydantic object or a python dictionary
+# As far as I understand - what Depends does is basically it will execute the get_async_session and return the db - so that we can use that db into out function
+@app.post('/upload')
+async def upload_file(
+    file: UploadFile = File(...),
+    caption: str = Form(""),
+    session: AsyncSession = Depends(get_async_session)
+    ):
+    post = Post(
+        caption = caption,
+        url = "dummy url",
+        file_type="photo",
+        file_name="dummy name"
+    )
+    session.add(post) # this is basically like staging the changes
+    await session.commit() # commit will fully commit the post into the database
+    await session.refresh(post) # this will basically go into the database and get us the post that is present in the database
+    # for example id and created_at is only present when session.commit - but the post object present here does not have the same
+    # to inorder to sync two objects ie between post that is present here and the post that is present in the database - we will do refresh
+    return post
 
+# Now inorder to view if the post has been persisted in the database we would have to create a get endpoint
+@app.get('/feed')
+async def get_feed(session: AsyncSession = Depends(get_async_session)):
+    result = await session.execute(select(Post).order_by(Post.created_at.desc()))
+    posts = [row[0] for row in result.all()]
 
-# While this is good, but updating this and then if we restart the server, we will loose everything
-# Hence we need a database to make things persistent. 
-text_posts = {
-    1: {
-        "title": "New Post",
-        "content": "Cool test post"
-    },
-    2: {
-        "title": "Getting Started with AI",
-        "content": "A beginner-friendly guide to understanding how AI works and where to start learning."
-    },
-    3: {
-        "title": "Why RAG Matters",
-        "content": "Retrieval-Augmented Generation helps LLMs stay factual by grounding responses in external knowledge."
-    }
-}
-
-# Reason why you should specify the data type of the arguments is that it can be documented by fastapi
-@app.get('/posts')
-def get_all_posts(limit: int = None) -> list[PostResponse]:
-    if limit:
-        return list(text_posts.values())[:limit]
-    return text_posts
-
-@app.get(f'/posts/{id}')
-def get_posts(id: int) -> PostResponse:
-    if id not in text_posts:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return text_posts.get(id)
-
-# FastAPI automatically validates the data that comes into the API
-@app.post("/posts")
-def create_post(post: PostCreate) -> PostResponse:
-    new_post = {"title": post.title, "content": post.content}
-    text_posts[len(text_posts) + 1] = new_post
-    return new_post
-# PostResponse is basically a data type that this endpoint will return
-# This also improves the documentation
-# At the same time handles type checking - so that the output is of the type that we specify
+    posts_data = []
+    for post in posts:
+        posts_data.append(
+            {
+                "id": str(post.id),
+                "caption": post.caption, 
+                "url": post.url,
+                "file_type": post.file_type,
+                "file_name": post.file_name,
+                "created_at": post.created_at.isoformat()
+            }
+        )
+    return {"posts": posts_data}
