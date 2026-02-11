@@ -1,6 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from app.schemas import PostCreate, PostResponse
-app = FastAPI()
+from app.db import Post, create_db_and_tables, get_async_session
+from sqlalchemy.ext.asyncio import AsyncSession
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_db_and_tables()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 # @app.get('/hello-world')
 # def hello_world():
@@ -8,7 +17,8 @@ app = FastAPI()
 # # We are mostly going to return a pydantic object or a python dictionary
 
 
-
+# While this is good, but updating this and then if we restart the server, we will loose everything
+# Hence we need a database to make things persistent. 
 text_posts = {
     1: {
         "title": "New Post",
