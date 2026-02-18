@@ -116,7 +116,7 @@ async def delete_post(
             raise HTTPException(status_code=404, detail="Post not found")
         
         if post.user_id != user.id:
-            raise HTTPException(status_code=404, detail="You are not authorized to delete this post")
+            raise HTTPException(status_code=403, detail="You are not authorized to delete this post")
 
         await session.delete(post)
         await session.commit()
